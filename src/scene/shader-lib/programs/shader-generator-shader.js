@@ -1,6 +1,7 @@
 import { hashCode } from '../../../core/hash.js';
 import { SEMANTIC_ATTR15, SEMANTIC_BLENDINDICES, SEMANTIC_BLENDWEIGHT, SHADERLANGUAGE_WGSL } from '../../../platform/graphics/constants.js';
 import { ShaderUtils } from '../../../platform/graphics/shader-utils.js';
+import { gammaNames, tonemapNames } from '../../constants.js';
 import { ShaderPass } from '../../shader-pass.js';
 import { shaderChunks } from '../chunks/chunks.js';
 import { ShaderGenerator } from './shader-generator.js';
@@ -14,7 +15,7 @@ const fShader = `
     #include "shaderPassDefines"
     #include "decodePS"
     #include "gamma"
-    #include "tonemapping"
+    #include "tonemappingPS"
     #include "fog"
     #include "userCode"
 `;
@@ -60,6 +61,10 @@ class ShaderGeneratorShader extends ShaderGenerator {
         definitionOptions.attributes = attributes;
     }
 
+    addSharedDefines(defines, options) {
+        defines.set('TONEMAP', tonemapNames[options.toneMapping]);
+        defines.set('GAMMA', gammaNames[options.gamma]);
+    }
 
     createVertexDefinition(definitionOptions, options, shaderPassInfo) {
 
@@ -72,16 +77,16 @@ class ShaderGeneratorShader extends ShaderGenerator {
             definitionOptions.vertexCode = desc.vertexCode;
 
         } else {
-            const includes = new Map();
+            const includes = new Map(Object.entries({
+                ...shaderChunks,
+                ...options.chunks
+            }));
             const defines = new Map(options.defines);
+            this.addSharedDefines(defines, options);
 
             includes.set('shaderPassDefines', shaderPassInfo.shaderDefines);
             includes.set('userCode', desc.vertexCode);
-            includes.set('transformCore', shaderChunks.transformCoreVS);
-            includes.set('transformInstancing', ''); // no default instancing, needs to be implemented in the user shader
-            includes.set('normalCore', shaderChunks.normalCoreVS);
-            includes.set('skinCode', shaderChunks.skinTexVS);
-            includes.set('skinTexVS', shaderChunks.skinTexVS);
+            includes.set('transformInstancingVS', ''); // no default instancing, needs to be implemented in the user shader
 
             if (options.skin) defines.set('SKIN', true);
             if (options.useInstancing) defines.set('INSTANCING', true);
@@ -109,16 +114,18 @@ class ShaderGeneratorShader extends ShaderGenerator {
             definitionOptions.fragmentCode = desc.fragmentCode;
 
         } else {
-            const includes = new Map();
-            const defines = new Map(options.defines);
+            const includes = new Map(Object.entries({
+                ...shaderChunks,
+                ...options.chunks
+            }));
 
             includes.set('shaderPassDefines', shaderPassInfo.shaderDefines);
-            includes.set('decodePS', shaderChunks.decodePS);
             includes.set('gamma', ShaderGenerator.gammaCode(options.gamma));
-            includes.set('tonemapping', ShaderGenerator.tonemapCode(options.toneMapping));
             includes.set('fog', ShaderGenerator.fogCode(options.fog));
             includes.set('userCode', desc.fragmentCode);
-            includes.set('pick', shaderChunks.pickPS);
+
+            const defines = new Map(options.defines);
+            this.addSharedDefines(defines, options);
 
             definitionOptions.fragmentCode = fShader;
             definitionOptions.fragmentIncludes = includes;

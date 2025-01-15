@@ -27,6 +27,8 @@ class GSplatCompressed {
 
     numSplats;
 
+    numSplatsVisible;
+
     /** @type {BoundingBox} */
     aabb;
 
@@ -57,6 +59,7 @@ class GSplatCompressed {
 
         this.device = device;
         this.numSplats = numSplats;
+        this.numVisibleSplats = numSplats;
 
         // initialize aabb
         this.aabb = new BoundingBox();
@@ -109,10 +112,10 @@ class GSplatCompressed {
             const srcCoeffs = [3, 8, 15][shBands - 1];
 
             for (let i = 0; i < numSplats; ++i) {
-                for (let j = 0; j < srcCoeffs; ++j) {
-                    target0[i * 16 + j] = shData[(i * 3 + 0) * srcCoeffs + j];
-                    target1[i * 16 + j] = shData[(i * 3 + 1) * srcCoeffs + j];
-                    target2[i * 16 + j] = shData[(i * 3 + 2) * srcCoeffs + j];
+                for (let j = 0; j < 15; ++j) {
+                    target0[i * 16 + j] = j < srcCoeffs ? shData[(i * 3 + 0) * srcCoeffs + j] : 127;
+                    target1[i * 16 + j] = j < srcCoeffs ? shData[(i * 3 + 1) * srcCoeffs + j] : 127;
+                    target2[i * 16 + j] = j < srcCoeffs ? shData[(i * 3 + 2) * srcCoeffs + j] : 127;
                 }
             }
 
@@ -147,7 +150,7 @@ class GSplatCompressed {
         result.setDefine('GSPLAT_COMPRESSED_DATA', true);
         result.setParameter('packedTexture', this.packedTexture);
         result.setParameter('chunkTexture', this.chunkTexture);
-        result.setParameter('tex_params', new Float32Array([this.numSplats, this.packedTexture.width, this.chunkTexture.width / 5]));
+        result.setParameter('numSplats', this.numSplatsVisible);
         if (this.shTexture0) {
             result.setDefine('SH_BANDS', 3);
             result.setParameter('shTexture0', this.shTexture0);

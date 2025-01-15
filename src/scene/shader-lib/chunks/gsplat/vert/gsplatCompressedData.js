@@ -1,9 +1,4 @@
 export default /* glsl */`
-attribute vec3 vertex_position;         // xy: cornerUV, z: render order offset
-attribute uint vertex_id_attrib;        // render order base
-
-uniform uvec3 tex_params;               // num splats, packed width, chunked width
-uniform highp usampler2D splatOrder;
 uniform highp usampler2D packedTexture;
 uniform highp sampler2D chunkTexture;
 
@@ -65,27 +60,11 @@ mat3 quatToMat3(vec4 R) {
     );
 }
 
-// calculate the current splat index and uvs
-bool readCenter(out SplatState state) {
-    // calculate splat order
-    state.order = vertex_id_attrib + uint(vertex_position.z);
-
-    // return if out of range (since the last block of splats may be partially full)
-    if (state.order >= tex_params.x) {
-        return false;
-    }
-
-    ivec2 orderUV = ivec2(state.order % tex_params.y, state.order / tex_params.y);
-
-    // read splat id
-    state.id = texelFetch(splatOrder, orderUV, 0).r;
-
-    // map id to uv
-    state.uv = ivec2(state.id % tex_params.y, state.id / tex_params.y);
-
-    // calculate chunkUV
-    uint chunkId = state.id / 256u;
-    ivec2 chunkUV = ivec2((chunkId % tex_params.z) * 5u, chunkId / tex_params.z);
+// read center
+vec3 readCenter(SplatSource source) {
+    uint w = uint(textureSize(chunkTexture, 0).x) / 5u;
+    uint chunkId = source.id / 256u;
+    ivec2 chunkUV = ivec2((chunkId % w) * 5u, chunkId / w);
 
     // read chunk and packed compressed data
     chunkDataA = texelFetch(chunkTexture, chunkUV, 0);
@@ -93,12 +72,14 @@ bool readCenter(out SplatState state) {
     chunkDataC = texelFetch(chunkTexture, chunkUV + ivec2(2, 0), 0);
     chunkDataD = texelFetch(chunkTexture, chunkUV + ivec2(3, 0), 0);
     chunkDataE = texelFetch(chunkTexture, chunkUV + ivec2(4, 0), 0);
-    packedData = texelFetch(packedTexture, state.uv, 0);
+    packedData = texelFetch(packedTexture, source.uv, 0);
 
-    state.center = mix(chunkDataA.xyz, vec3(chunkDataA.w, chunkDataB.xy), unpack111011(packedData.x));
-    state.cornerUV = vertex_position.xy;
+    return mix(chunkDataA.xyz, vec3(chunkDataA.w, chunkDataB.xy), unpack111011(packedData.x));
+}
 
-    return true;
+vec4 readColor(in SplatSource source) {
+    vec4 r = unpack8888(packedData.w);
+    return vec4(mix(chunkDataD.xyz, vec3(chunkDataD.w, chunkDataE.xy), r.rgb), r.w);
 }
 
 vec4 getRotation() {
@@ -109,13 +90,8 @@ vec3 getScale() {
     return exp(mix(vec3(chunkDataB.zw, chunkDataC.x), chunkDataC.yzw, unpack111011(packedData.z)));
 }
 
-vec4 readColor(in SplatState state) {
-    vec4 r = unpack8888(packedData.w);
-    return vec4(mix(chunkDataD.xyz, vec3(chunkDataD.w, chunkDataE.xy), r.rgb), r.w);
-}
-
 // given a rotation matrix and scale vector, compute 3d covariance A and B
-void readCovariance(in SplatState state, out vec3 covA, out vec3 covB) {
+void readCovariance(in SplatSource source, out vec3 covA, out vec3 covB) {
     mat3 rot = quatToMat3(getRotation());
     vec3 scale = getScale();
 

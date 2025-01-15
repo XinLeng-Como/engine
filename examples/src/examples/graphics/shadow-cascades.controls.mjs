@@ -25,7 +25,8 @@ export const controls = ({ observer, ReactPCUI, React, jsx, fragment }) => {
                         { v: pc.SHADOW_PCF3_16F, t: 'PCF3_16F' },
                         { v: pc.SHADOW_PCF5_16F, t: 'PCF5_16F' },
                         { v: pc.SHADOW_VSM_16F, t: 'VSM_16F' },
-                        { v: pc.SHADOW_VSM_32F, t: 'VSM_32F' }
+                        { v: pc.SHADOW_VSM_32F, t: 'VSM_32F' },
+                        { v: pc.SHADOW_PCSS_32F, t: 'PCSS_32F' }
                     ]
                 })
             ),
@@ -69,6 +70,17 @@ export const controls = ({ observer, ReactPCUI, React, jsx, fragment }) => {
                     link: { observer, path: 'settings.light.cascadeDistribution' },
                     min: 0,
                     max: 1,
+                    precision: 2
+                })
+            ),
+            jsx(
+                LabelGroup,
+                { text: 'Blend' },
+                jsx(SliderInput, {
+                    binding: new BindingTwoWay(),
+                    link: { observer, path: 'settings.light.cascadeBlend' },
+                    min: 0,
+                    max: 0.2,
                     precision: 2
                 })
             ),
