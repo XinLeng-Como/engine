@@ -24,8 +24,6 @@ device.maxPixelRatio = Math.min(window.devicePixelRatio, 2);
 
 const createOptions = new pc.AppOptions();
 createOptions.graphicsDevice = device;
-createOptions.mouse = new pc.Mouse(document.body);
-createOptions.keyboard = new pc.Keyboard(window);
 
 createOptions.componentSystems = [
     pc.RenderComponentSystem,
@@ -44,7 +42,6 @@ app.setCanvasResolution(pc.RESOLUTION_AUTO);
 
 // load assets
 const assets = {
-    script: new pc.Asset('script', 'script', { url: `${rootPath}/static/scripts/camera/orbit-camera.js` }),
     font: new pc.Asset('font', 'font', { url: `${rootPath}/static/assets/fonts/courier.json` })
 };
 /**
@@ -126,10 +123,14 @@ camera.addComponent('camera', {
 const cameraOffset = 4 * camera.camera?.aspectRatio;
 camera.setPosition(cameraOffset, cameraOffset, cameraOffset);
 app.root.addChild(camera);
+
+// camera controls
 const cameraControls = /** @type {CameraControls} */ (camera.script.create(CameraControls, {
-    attributes: {
+    properties: {
         focusPoint: pc.Vec3.ZERO,
-        sceneSize: 5
+        sceneSize: 5,
+        rotateDamping: 0,
+        moveDamping: 0
     }
 }));
 app.on('gizmo:pointer', (/** @type {boolean} */ hasPointer) => {
@@ -138,6 +139,15 @@ app.on('gizmo:pointer', (/** @type {boolean} */ hasPointer) => {
     } else {
         cameraControls.attach(camera.camera);
     }
+});
+
+// outline renderer
+const outlineLayer = new pc.Layer({ name: 'OutlineLayer' });
+app.scene.layers.push(outlineLayer);
+const immediateLayer = /** @type {pc.Layer} */ (app.scene.layers.getLayerByName('Immediate'));
+const outlineRenderer = new pc.OutlineRenderer(app, outlineLayer);
+app.on('update', () => {
+    outlineRenderer.frameUpdate(camera, immediateLayer, false);
 });
 
 // grid
@@ -179,17 +189,44 @@ const setGizmoControls = () => {
 };
 gizmoHandler.switch('translate');
 setGizmoControls();
-gizmoHandler.add(box);
-window.focus();
+
+// view cube
+const viewCube = new pc.ViewCube(new pc.Vec4(0, 1, 1, 0));
+viewCube.dom.style.margin = '20px';
+data.set('viewCube', {
+    colorX: Object.values(viewCube.colorX),
+    colorY: Object.values(viewCube.colorY),
+    colorZ: Object.values(viewCube.colorZ),
+    radius: viewCube.radius,
+    textSize: viewCube.textSize,
+    lineThickness: viewCube.lineThickness,
+    lineLength: viewCube.lineLength
+});
+const tmpV1 = new pc.Vec3();
+viewCube.on(pc.ViewCube.EVENT_CAMERAALIGN, (/** @type {pc.Vec3} */ dir) => {
+    const cameraPos = camera.getPosition();
+    const focusPoint = cameraControls.focusPoint;
+    const cameraDist = focusPoint.distance(cameraPos);
+    const cameraStart = tmpV1.copy(dir).mulScalar(cameraDist).add(focusPoint);
+    cameraControls.refocus(focusPoint, cameraStart);
+});
+app.on('prerender', () => {
+    viewCube.update(camera.getWorldTransform());
+});
 
 // selector
 const layers = app.scene.layers;
 const selector = new Selector(app, camera.camera, [layers.getLayerByName('World')]);
-selector.on('select', (/** @type {pc.GraphNode} */ node, /** @type {boolean} */ clear) => {
+selector.on('select', (/** @type {pc.Entity} */ node, /** @type {boolean} */ clear) => {
     gizmoHandler.add(node, clear);
+    if (clear) {
+        outlineRenderer.removeAllEntities();
+    }
+    outlineRenderer.addEntity(node, pc.Color.WHITE);
 });
 selector.on('deselect', () => {
     gizmoHandler.clear();
+    outlineRenderer.removeAllEntities();
 });
 
 // ensure canvas is resized when window changes size + keep gizmo size consistent to canvas size
@@ -288,18 +325,52 @@ data.on('*:set', (/** @type {string} */ path, /** @type {any} */ value) => {
             }
             break;
         }
+        case 'viewCube': {
+            switch (key) {
+                case 'colorX':
+                    viewCube.colorX = tmpC1.set(value[0], value[1], value[2]);
+                    break;
+                case 'colorY':
+                    viewCube.colorY = tmpC1.set(value[0], value[1], value[2]);
+                    break;
+                case 'colorZ':
+                    viewCube.colorZ = tmpC1.set(value[0], value[1], value[2]);
+                    break;
+                case 'radius':
+                    viewCube.radius = value;
+                    break;
+                case 'textSize':
+                    viewCube.textSize = value;
+                    break;
+                case 'lineThickness':
+                    viewCube.lineThickness = value;
+                    break;
+                case 'lineLength':
+                    viewCube.lineLength = value;
+                    break;
+            }
+            break;
+        }
 
     }
 });
 
+// destroy handlers
 app.on('destroy', () => {
     gizmoHandler.destroy();
     selector.destroy();
+    viewCube.destroy();
 
     window.removeEventListener('resize', resize);
     window.removeEventListener('keydown', keydown);
     window.removeEventListener('keyup', keyup);
     window.removeEventListener('keypress', keypress);
 });
+
+// initial selection
+selector.fire('select', box, true);
+
+// focus canvas
+window.focus();
 
 export { app };

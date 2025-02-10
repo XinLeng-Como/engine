@@ -1,7 +1,6 @@
-/* eslint-disable-next-line import/no-unresolved */
 import { Script } from 'playcanvas';
 
-export default class XrControllers extends Script {
+class XrControllers extends Script {
     /**
      * The base URL for fetching the WebXR input profiles.
      *
@@ -13,6 +12,11 @@ export default class XrControllers extends Script {
     controllers = new Map();
 
     initialize() {
+        if (!this.app.xr) {
+            console.error('XrControllers script requires XR to be enabled on the application');
+            return;
+        }
+
         this.app.xr.input.on('add', async (inputSource) => {
             if (!inputSource.profiles?.length) {
                 console.warn('No profiles available for input source');
@@ -84,7 +88,7 @@ export default class XrControllers extends Script {
     }
 
     update(dt) {
-        if (this.app.xr.active) {
+        if (this.app.xr?.active) {
             for (const [inputSource, { entity, jointMap }] of this.controllers) {
                 if (inputSource.hand) {
                     for (const [joint, jointEntity] of jointMap) {
@@ -99,3 +103,5 @@ export default class XrControllers extends Script {
         }
     }
 }
+
+export { XrControllers };

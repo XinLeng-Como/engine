@@ -82,17 +82,19 @@ const calcEntityAABB = (bbox, entity) => {
  * @returns {CameraControls} The camera-controls script.
  */
 const createFlyCamera = (focus) => {
+    const start = new pc.Vec3(0, 20, 30);
+
     const camera = new pc.Entity();
     camera.addComponent('camera');
     camera.addComponent('script');
-    camera.setPosition(0, 20, 30);
+    camera.setPosition(start);
     app.root.addChild(camera);
 
     const bbox = calcEntityAABB(new pc.BoundingBox(), focus);
 
     /** @type {CameraControls} */
     const script = camera.script.create(CameraControls, {
-        attributes: {
+        properties: {
             enableOrbit: false,
             enablePan: false,
             focusPoint: bbox.center,

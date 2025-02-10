@@ -1,4 +1,3 @@
-/* eslint-disable-next-line import/no-unresolved */
 import { Color, Script, Vec3 } from 'playcanvas';
 
 /** @import { XrInputSource } from 'playcanvas' */
@@ -13,7 +12,7 @@ import { Color, Script, Vec3 } from 'playcanvas';
  * session. Use it in conjunction with the `XrControllers` script to handle the rendering of
  * the controllers.
  */
-export class XrNavigation extends Script {
+class XrNavigation extends Script {
     /** @type {Set<XrInputSource>} */
     inputSources = new Set();
 
@@ -28,6 +27,11 @@ export class XrNavigation extends Script {
     inputHandlers = new Map();
 
     initialize() {
+        if (!this.app.xr) {
+            console.error('XrNavigation script requires XR to be enabled on the application');
+            return;
+        }
+
         this.app.xr.input.on('add', (inputSource) => {
             const handleSelectStart = () => {
                 this.activePointers.set(inputSource, true);
@@ -131,3 +135,5 @@ export class XrNavigation extends Script {
         }
     }
 }
+
+export { XrNavigation };

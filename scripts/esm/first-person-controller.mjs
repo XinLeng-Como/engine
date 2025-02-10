@@ -1,4 +1,3 @@
-/* eslint-disable-next-line import/no-unresolved */
 import { math, Script, Vec2, Vec3, Mat4 } from 'playcanvas';
 
 /** @import { AppBase, GraphicsDevice, Entity, RigidBodyComponent } from 'playcanvas' */
@@ -25,7 +24,7 @@ const applyRadialDeadZone = (pos, remappedPos, deadZoneLow, deadZoneHigh) => {
     if (magnitude > deadZoneLow) {
         const legalRange = 1 - deadZoneHigh - deadZoneLow;
         const normalizedMag = Math.min(1, (magnitude - deadZoneLow) / legalRange);
-        remappedPos.copy(pos).scale(normalizedMag / magnitude);
+        remappedPos.copy(pos).mulScalar(normalizedMag / magnitude);
     } else {
         remappedPos.set(0, 0);
     }
@@ -69,9 +68,9 @@ class KeyboardMouseInput {
         if (value === this._enabled) {
             return;
         }
-        this._enabled = value;
+        this._enabled = value ?? this._enabled;
 
-        if (value) {
+        if (this._enabled) {
             this._bind();
         } else {
             this._unbind();
@@ -160,8 +159,12 @@ class KeyboardMouseInput {
         this._handleKey(e.key, 0);
     }
 
+    /**
+     * @param {MouseEvent} e - The mouse event.
+     * @private
+     */
     _onMouseDown(e) {
-        if (document.pointerLockElement !== this._canvas) {
+        if (e.target === this._canvas && document.pointerLockElement !== this._canvas) {
             this._canvas.requestPointerLock();
         }
     }
@@ -301,9 +304,9 @@ class MobileInput {
         if (value === this._enabled) {
             return;
         }
-        this._enabled = value;
+        this._enabled = value ?? this._enabled;
 
-        if (value) {
+        if (this._enabled) {
             this._bind();
         } else {
             this._unbind();
@@ -391,12 +394,12 @@ class MobileInput {
             if (touch.identifier === this._leftStick.identifier) {
                 this._leftStick.pos.set(touch.pageX, touch.pageY);
                 this._leftStick.pos.sub(this._leftStick.center);
-                this._leftStick.pos.scale(1 / this.radius);
+                this._leftStick.pos.mulScalar(1 / this.radius);
                 this._app.fire('leftjoystick:move', touch.pageX * xFactor, touch.pageY * yFactor);
             } else if (touch.identifier === this._rightStick.identifier) {
                 this._rightStick.pos.set(touch.pageX, touch.pageY);
                 this._rightStick.pos.sub(this._rightStick.center);
-                this._rightStick.pos.scale(1 / this.radius);
+                this._rightStick.pos.mulScalar(1 / this.radius);
                 this._app.fire('rightjoystick:move', touch.pageX * xFactor, touch.pageY * yFactor);
             }
         }
@@ -569,14 +572,14 @@ class GamePadInput {
      * @param {AppBase} app - The application.
      */
     constructor(app) {
-        this.app = app;
+        this._app = app;
     }
 
     set enabled(value) {
         if (value === this._enabled) {
             return;
         }
-        this._enabled = value;
+        this._enabled = value ?? this._enabled;
     }
 
     get enabled() {
@@ -714,7 +717,6 @@ class FirstPersonController extends Script {
      */
     _gamePadInput;
 
-
     /**
      * @type {number}
      * @private
@@ -812,12 +814,7 @@ class FirstPersonController extends Script {
      */
     jumpForce = 600;
 
-    /**
-     * @param {object} args - The script arguments.
-     */
-    constructor(args) {
-        super(args);
-
+    initialize() {
         // input
         this._keyboardMouseInput = new KeyboardMouseInput(this.app);
         this._mobileInput = new MobileInput(this.app);
@@ -834,47 +831,38 @@ class FirstPersonController extends Script {
             this._gamePadInput.enabled = false;
         });
 
-        const {
-            camera,
-            lookSens,
-            speedGround,
-            speedAir,
-            sprintMult,
-            velocityDampingGround,
-            velocityDampingAir,
-            jumpForce,
-            mobileDeadZone,
-            mobileTurnSpeed,
-            mobileRadius,
-            mobileDoubleTapInterval,
-            gamePadDeadZoneLow,
-            gamePadDeadZoneHigh,
-            gamePadTurnSpeed
-        } = args.attributes;
-
-        if (!camera) {
-            throw new Error('No camera entity found');
+        if (!this.camera) {
+            this.camera = this.entity.findComponent('camera').entity;
+            if (!this.camera) {
+                throw new Error('FirstPersonController expects a camera entity');
+            }
+        }
+        if (!this.entity.collision) {
+            this.entity.addComponent('collision', {
+                type: 'capsule',
+                radius: 0.5,
+                height: 2
+            });
         }
         if (!this.entity.rigidbody) {
-            throw new Error('No rigidbody component found');
+            this.entity.addComponent('rigidbody', {
+                type: 'dynamic',
+                mass: 100,
+                linearDamping: 0,
+                angularDamping: 0,
+                linearFactor: Vec3.ONE,
+                angularFactor: Vec3.ZERO,
+                friction: 0.5,
+                restitution: 0
+            });
         }
         this._rigidbody = this.entity.rigidbody;
 
-        this.camera = camera;
-        this.lookSens = lookSens ?? this.lookSens;
-        this.speedGround = speedGround ?? this.speedGround;
-        this.speedAir = speedAir ?? this.speedAir;
-        this.sprintMult = sprintMult ?? this.sprintMult;
-        this.velocityDampingGround = velocityDampingGround ?? this.velocityDampingGround;
-        this.velocityDampingAir = velocityDampingAir ?? this.velocityDampingAir;
-        this.jumpForce = jumpForce ?? this.jumpForce;
-        this.mobileDeadZone = mobileDeadZone ?? this.mobileDeadZone;
-        this.mobileTurnSpeed = mobileTurnSpeed ?? this.mobileTurnSpeed;
-        this.mobileRadius = mobileRadius ?? this.mobileRadius;
-        this.mobileDoubleTapInterval = mobileDoubleTapInterval ?? this.mobileDoubleTapInterval;
-        this.gamePadDeadZoneLow = gamePadDeadZoneLow ?? this.gamePadDeadZoneLow;
-        this.gamePadDeadZoneHigh = gamePadDeadZoneHigh ?? this.gamePadDeadZoneHigh;
-        this.gamePadTurnSpeed = gamePadTurnSpeed ?? this.gamePadTurnSpeed;
+        this.mobileDeadZone = this._mobileDeadZone;
+        this.mobileTurnSpeed = this._mobileTurnSpeed;
+        this.gamePadDeadZoneLow = this._gamePadDeadZoneLow;
+        this.gamePadDeadZoneHigh = this._gamePadDeadZoneHigh;
+        this.gamePadTurnSpeed = this._gamePadTurnSpeed;
 
         this.app.on('cc:look', (movX, movY) => {
             this.look.x = math.clamp(this.look.x - movY * this.lookSens, -LOOK_MAX_ANGLE, LOOK_MAX_ANGLE);
@@ -898,6 +886,8 @@ class FirstPersonController extends Script {
         this.app.on('cc:sprint', (state) => {
             this.controls.sprint = state;
         });
+
+        this.on('destroy', this.destroy, this);
     }
 
     /**
@@ -908,11 +898,10 @@ class FirstPersonController extends Script {
      * @range [0, 0.4]
      */
     set mobileDeadZone(value) {
-        if (value === this._mobileDeadZone) {
-            return;
+        this._mobileDeadZone = value ?? this._mobileDeadZone;
+        if (this._mobileInput) {
+            this._mobileInput.deadZone = this._mobileDeadZone;
         }
-        this._mobileDeadZone = value;
-        this._mobileInput.deadZone = value;
     }
 
     get mobileDeadZone() {
@@ -926,11 +915,10 @@ class FirstPersonController extends Script {
      * @type {number}
      */
     set mobileTurnSpeed(value) {
-        if (value === this._mobileTurnSpeed) {
-            return;
+        this._mobileTurnSpeed = value ?? this._mobileTurnSpeed;
+        if (this._mobileInput) {
+            this._mobileInput.turnSpeed = this._mobileTurnSpeed;
         }
-        this._mobileTurnSpeed = value;
-        this._mobileInput.turnSpeed = value;
     }
 
     get mobileTurnSpeed() {
@@ -944,10 +932,7 @@ class FirstPersonController extends Script {
      * @type {number}
      */
     set mobileRadius(value) {
-        if (value === this._mobileRadius) {
-            return;
-        }
-        this._mobileRadius = value;
+        this._mobileRadius = value ?? this._mobileRadius;
     }
 
     get mobileRadius() {
@@ -961,10 +946,7 @@ class FirstPersonController extends Script {
      * @type {number}
      */
     set mobileDoubleTapInterval(value) {
-        if (value === this._mobileDoubleTapInterval) {
-            return;
-        }
-        this._mobileDoubleTapInterval = value;
+        this._mobileDoubleTapInterval = value ?? this._mobileDoubleTapInterval;
     }
 
     get mobileDoubleTapInterval() {
@@ -979,11 +961,10 @@ class FirstPersonController extends Script {
      * @range [0, 0.4]
      */
     set gamePadDeadZoneLow(value) {
-        if (value === this._gamePadDeadZoneLow) {
-            return;
+        this._gamePadDeadZoneLow = value ?? this._gamePadDeadZoneLow;
+        if (this._gamePadInput) {
+            this._gamePadInput.deadZoneLow = this._gamePadDeadZoneLow;
         }
-        this._gamePadDeadZoneLow = value;
-        this._gamePadInput.deadZoneLow = value;
     }
 
     get gamePadDeadZoneLow() {
@@ -998,11 +979,10 @@ class FirstPersonController extends Script {
      * @range [0, 0.4]
      */
     set gamePadDeadZoneHigh(value) {
-        if (value === this._gamePadDeadZoneHigh) {
-            return;
+        this._gamePadDeadZoneHigh = value ?? this._gamePadDeadZoneHigh;
+        if (this._gamePadInput) {
+            this._gamePadInput.deadZoneHigh = this._gamePadDeadZoneHigh;
         }
-        this._gamePadDeadZoneHigh = value;
-        this._gamePadInput.deadZoneHigh = value;
     }
 
     get gamePadDeadZoneHigh() {
@@ -1016,11 +996,10 @@ class FirstPersonController extends Script {
      * @type {number}
      */
     set gamePadTurnSpeed(value) {
-        if (value === this._gamePadTurnSpeed) {
-            return;
+        this._gamePadTurnSpeed = value ?? this._gamePadTurnSpeed;
+        if (this._gamePadInput) {
+            this._gamePadInput.turnSpeed = this._gamePadTurnSpeed;
         }
-        this._gamePadTurnSpeed = value;
-        this._gamePadInput.turnSpeed = value;
     }
 
     get gamePadTurnSpeed() {

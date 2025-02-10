@@ -72,7 +72,7 @@ assetListLoader.load(() => {
     app.scene.envAtlas = assets.helipad.resource;
     app.scene.exposure = 1.2;
 
-    // create an instance of the platform and add it to the scene
+    // create an instance of the apartment and add it to the scene
     const platformEntity = assets.apartment.resource.instantiateRenderEntity();
     platformEntity.setLocalScale(30, 30, 30);
     app.root.addChild(platformEntity);

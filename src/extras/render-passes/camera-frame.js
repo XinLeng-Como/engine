@@ -172,6 +172,9 @@ import { CameraFrameOptions, RenderPassCameraFrame } from './render-pass-camera-
  * @category Render Pass
  */
 class CameraFrame {
+    /** @private */
+    _enabled = true;
+
     /**
      * Rendering settings.
      *
@@ -302,7 +305,7 @@ class CameraFrame {
         Debug.assert(cameraComponent, 'CameraFrame: cameraComponent must be defined');
 
         this.updateOptions();
-        this.enabled = true;
+        this.enable();
     }
 
     /**
@@ -313,37 +316,53 @@ class CameraFrame {
     }
 
     enable() {
-        if (!this.renderPassCamera) {
-            const cameraComponent = this.cameraComponent;
-            this.renderPassCamera = new RenderPassCameraFrame(this.app, cameraComponent, this.options);
-            cameraComponent.renderPasses = [this.renderPassCamera];
-        }
+        Debug.assert(!this.renderPassCamera);
+
+        this.renderPassCamera = this.createRenderPass();
+        this.cameraComponent.renderPasses = [this.renderPassCamera];
     }
 
     disable() {
-        if (this.renderPassCamera) {
-            const cameraComponent = this.cameraComponent;
-            cameraComponent.renderPasses?.forEach((renderPass) => {
-                renderPass.destroy();
-            });
-            cameraComponent.renderPasses = [];
-            cameraComponent.rendering = null;
+        Debug.assert(this.renderPassCamera);
 
-            cameraComponent.jitter = 0;
-        }
+        const cameraComponent = this.cameraComponent;
+        cameraComponent.renderPasses?.forEach((renderPass) => {
+            renderPass.destroy();
+        });
+        cameraComponent.renderPasses = [];
+        cameraComponent.rendering = null;
+
+        cameraComponent.jitter = 0;
+
+        // disable SSAO included in the lighting pass
+        cameraComponent.shaderParams.ssaoEnabled = false;
+
+        this.renderPassCamera = null;
     }
 
     /**
-     * Sets the enabled state of the camera frame. This disabled the render passes, and releases
-     * any resources.
+     * Creates a render pass for the camera frame. Override this method to utilize a custom render
+     * pass, typically one that extends {@link RenderPassCameraFrame}.
+     *
+     * @returns {RenderPassCameraFrame} - The render pass.
+     */
+    createRenderPass() {
+        return new RenderPassCameraFrame(this.app, this.cameraComponent, this.options);
+    }
+
+    /**
+     * Sets the enabled state of the camera frame. Passing false will release associated resources.
      *
      * @type {boolean}
      */
     set enabled(value) {
-        if (value) {
-            this.enable();
-        } else {
-            this.disable();
+        if (this._enabled !== value) {
+            if (value) {
+                this.enable();
+            } else {
+                this.disable();
+            }
+            this._enabled = value;
         }
     }
 
@@ -353,7 +372,7 @@ class CameraFrame {
      * @type {boolean}
      */
     get enabled() {
-        return this.renderPassCamera !== null;
+        return this._enabled;
     }
 
     updateOptions() {
@@ -378,7 +397,7 @@ class CameraFrame {
      */
     update() {
 
-        if (!this.enabled) return;
+        if (!this._enabled) return;
 
         const cameraComponent = this.cameraComponent;
         const { options, renderPassCamera, rendering, bloom, grading, vignette, fringing, taa, ssao } = this;

@@ -1,4 +1,3 @@
-/* eslint-disable-next-line import/no-unresolved */
 import { Vec2, Vec3, Ray, Plane, Mat4, Quat, Script, math } from 'playcanvas';
 
 /** @import { AppBase, Entity, CameraComponent } from 'playcanvas' */
@@ -19,8 +18,10 @@ const tmpQ1 = new Quat();
 const tmpR1 = new Ray();
 const tmpP1 = new Plane();
 
+/** @type {AddEventListenerOptions & EventListenerOptions} */
 const PASSIVE = { passive: false };
 const ZOOM_SCALE_SCENE_MULT = 10;
+const EPSILON = 0.0001;
 
 /**
  * Calculate the lerp rate.
@@ -56,7 +57,7 @@ class CameraControls extends Script {
 
     /**
      * @private
-     * @type {CameraComponent}
+     * @type {CameraComponent | null}
      */
     _camera = null;
 
@@ -136,7 +137,13 @@ class CameraControls extends Script {
      * @type {boolean}
      * @private
      */
-    _orbiting = false;
+    _dragging = false;
+
+    /**
+     * @type {boolean}
+     * @private
+     */
+    _orbiting = true;
 
     /**
      * @type {boolean}
@@ -157,6 +164,12 @@ class CameraControls extends Script {
     _moving = false;
 
     /**
+     * @type {boolean}
+     * @private
+     */
+    _focusing = false;
+
+    /**
      * @type {Record<string, boolean>}
      * @private
      */
@@ -175,7 +188,7 @@ class CameraControls extends Script {
      * @type {HTMLElement}
      * @private
      */
-    _element;
+    _element = this.app.graphicsDevice.canvas;
 
     /**
      * @type {Mat4}
@@ -225,8 +238,18 @@ class CameraControls extends Script {
 
     /**
      * @attribute
+     * @title Focus Damping
+     * @description The damping applied when calling {@link CameraControls#focus}. A higher value means
+     * more damping. A value of 0 means no damping.
+     * @type {number}
+     */
+    focusDamping = 0.98;
+
+    /**
+     * @attribute
      * @title Rotate Speed
      * @description The rotation speed.
+     * @enabledif {enableOrbit}
      * @type {number}
      */
     rotateSpeed = 0.2;
@@ -235,14 +258,16 @@ class CameraControls extends Script {
      * @attribute
      * @title Rotate Damping
      * @description The rotation damping. A higher value means more damping. A value of 0 means no damping.
+     * @enabledif {enableOrbit}
      * @type {number}
      */
-    rotateDamping = 0.97;
+    rotateDamping = 0.98;
 
     /**
      * @attribute
      * @title Move Speed
      * @description The fly move speed relative to the scene size.
+     * @enabledif {enableFly || enablePan}
      * @type {number}
      */
     moveSpeed = 2;
@@ -251,6 +276,7 @@ class CameraControls extends Script {
      * @attribute
      * @title Move Fast Speed
      * @description The fast fly move speed relative to the scene size.
+     * @enabledif {enableFly || enablePan}
      * @type {number}
      */
     moveFastSpeed = 4;
@@ -259,6 +285,7 @@ class CameraControls extends Script {
      * @attribute
      * @title Move Slow Speed
      * @description The slow fly move speed relative to the scene size.
+     * @enabledif {enableFly || enablePan}
      * @type {number}
      */
     moveSlowSpeed = 1;
@@ -267,6 +294,7 @@ class CameraControls extends Script {
      * @attribute
      * @title Move Damping
      * @description The movement damping. A higher value means more damping. A value of 0 means no damping.
+     * @enabledif {enableFly || enablePan}
      * @type {number}
      */
     moveDamping = 0.98;
@@ -303,54 +331,7 @@ class CameraControls extends Script {
      */
     zoomScaleMin = 0;
 
-    /**
-     * @param {object} args - The script arguments.
-     */
-    constructor(args) {
-        super(args);
-        const {
-            element,
-            focusPoint,
-            pitchRange,
-            sceneSize,
-            enableOrbit,
-            enablePan,
-            enableFly,
-            rotateSpeed,
-            rotateDamping,
-            moveSpeed,
-            moveFastSpeed,
-            moveSlowSpeed,
-            moveDamping,
-            zoomSpeed,
-            zoomPinchSens,
-            zoomDamping,
-            zoomMin,
-            zoomMax,
-            zoomScaleMin
-        } = args.attributes;
-
-        this._element = element ?? this.app.graphicsDevice.canvas;
-
-        this.enableOrbit = enableOrbit ?? this.enableOrbit;
-        this.enablePan = enablePan ?? this.enablePan;
-        this.enableFly = enableFly ?? this.enableFly;
-
-        this.sceneSize = sceneSize ?? this.sceneSize;
-
-        this.rotateSpeed = rotateSpeed ?? this.rotateSpeed;
-        this.rotateDamping = rotateDamping ?? this.rotateDamping;
-
-        this.moveSpeed = moveSpeed ?? this.moveSpeed;
-        this.moveFastSpeed = moveFastSpeed ?? this.moveFastSpeed;
-        this.moveSlowSpeed = moveSlowSpeed ?? this.moveSlowSpeed;
-        this.moveDamping = moveDamping ?? this.moveDamping;
-
-        this.zoomSpeed = zoomSpeed ?? this.zoomSpeed;
-        this.zoomPinchSens = zoomPinchSens ?? this.zoomPinchSens;
-        this.zoomDamping = zoomDamping ?? this.zoomDamping;
-        this.zoomScaleMin = zoomScaleMin ?? this.zoomScaleMin;
-
+    initialize() {
         this._onWheel = this._onWheel.bind(this);
         this._onKeyDown = this._onKeyDown.bind(this);
         this._onKeyUp = this._onKeyUp.bind(this);
@@ -364,10 +345,12 @@ class CameraControls extends Script {
         }
         this.attach(this.entity.camera);
 
-        this.focusPoint = focusPoint ?? this.focusPoint;
-        this.pitchRange = pitchRange ?? this.pitchRange;
-        this.zoomMin = zoomMin ?? this.zoomMin;
-        this.zoomMax = zoomMax ?? this.zoomMax;
+        this.focusPoint = this._origin ?? this.focusPoint;
+        this.pitchRange = this._pitchRange ?? this.pitchRange;
+        this.zoomMin = this._zoomMin ?? this.zoomMin;
+        this.zoomMax = this._zoomMax ?? this.zoomMax;
+
+        this.on('destroy', this.destroy, this);
     }
 
     /**
@@ -380,7 +363,9 @@ class CameraControls extends Script {
 
         const camera = this._camera;
         this.detach();
-        this.attach(camera);
+        if (camera) {
+            this.attach(camera);
+        }
     }
 
     get element() {
@@ -396,9 +381,12 @@ class CameraControls extends Script {
      */
     set focusPoint(point) {
         if (!this._camera) {
+            if (point instanceof Vec3) {
+                this._origin.copy(point);
+            }
             return;
         }
-        this.focus(point, this._camera.entity.getPosition(), false);
+        this.focus(point, this.entity.getPosition(), false);
     }
 
     get focusPoint() {
@@ -414,6 +402,9 @@ class CameraControls extends Script {
      * @default [-360, 360]
      */
     set pitchRange(value) {
+        if (!(value instanceof Vec2)) {
+            return;
+        }
         this._pitchRange.copy(value);
         this._clampAngles(this._dir);
         this._smoothTransform(-1);
@@ -431,7 +422,7 @@ class CameraControls extends Script {
      * @default 0
      */
     set zoomMin(value) {
-        this._zoomMin = value;
+        this._zoomMin = value ?? this._zoomMin;
         this._zoomDist = this._clampZoom(this._zoomDist);
         this._smoothZoom(-1);
     }
@@ -449,7 +440,7 @@ class CameraControls extends Script {
      * @default 0
      */
     set zoomMax(value) {
-        this._zoomMax = value;
+        this._zoomMax = value ?? this._zoomMax;
         this._zoomDist = this._clampZoom(this._zoomDist);
         this._smoothZoom(-1);
 
@@ -465,7 +456,7 @@ class CameraControls extends Script {
      * @returns {Vec3} - The focus vector.
      */
     _focusDir(out) {
-        return out.copy(this._camera.entity.forward).mulScalar(this._zoomDist);
+        return out.copy(this.entity.forward).mulScalar(this._zoomDist);
     }
 
     /**
@@ -573,6 +564,43 @@ class CameraControls extends Script {
 
     /**
      * @private
+     * @returns {boolean} Whether the switch to orbit was successful.
+     */
+    _switchToOrbit() {
+        if (!this.enableOrbit) {
+            return false;
+        }
+        if (this._flying) {
+            this._flying = false;
+            this._focusDir(tmpV1);
+            this._origin.add(tmpV1);
+            this._position.add(tmpV1);
+        }
+        this._orbiting = true;
+        return true;
+    }
+
+    /**
+     * @private
+     * @returns {boolean} Whether the switch to fly was successful.
+     */
+    _switchToFly() {
+        if (!this.enableFly) {
+            return false;
+        }
+        if (this._orbiting) {
+            this._orbiting = false;
+            this._zoomDist = this._cameraDist;
+            this._origin.copy(this.entity.getPosition());
+            this._position.copy(this._origin);
+            this._cameraTransform.setTranslate(0, 0, 0);
+        }
+        this._flying = true;
+        return true;
+    }
+
+    /**
+     * @private
      * @param {PointerEvent} event - The pointer event.
      */
     _onPointerDown(event) {
@@ -587,6 +615,11 @@ class CameraControls extends Script {
         const startFly = this._isStartFly(event);
         const startOrbit = this._isStartOrbit(event);
 
+        if (this._focusing) {
+            this._cancelSmoothTransform();
+            this._focusing = false;
+        }
+
         if (startTouchPan) {
             // start touch pan
             this._lastPinchDist = this._getPinchDist();
@@ -597,18 +630,17 @@ class CameraControls extends Script {
             // start mouse pan
             this._lastPosition.set(event.clientX, event.clientY);
             this._panning = true;
+            this._dragging = true;
         }
         if (startFly) {
             // start fly
-            this._zoomDist = this._cameraDist;
-            this._origin.copy(this._camera.entity.getPosition());
-            this._position.copy(this._origin);
-            this._cameraTransform.setTranslate(0, 0, 0);
-            this._flying = true;
+            this._switchToFly();
+            this._dragging = true;
         }
         if (startOrbit) {
             // start orbit
-            this._orbiting = true;
+            this._switchToOrbit();
+            this._dragging = true;
         }
     }
 
@@ -621,6 +653,11 @@ class CameraControls extends Script {
             return;
         }
         this._pointerEvents.set(event.pointerId, event);
+
+        if (this._focusing) {
+            this._cancelSmoothTransform();
+            this._focusing = false;
+        }
 
         if (this._pointerEvents.size === 1) {
             if (this._panning) {
@@ -659,17 +696,11 @@ class CameraControls extends Script {
             this._lastPinchDist = -1;
             this._panning = false;
         }
-        if (this._orbiting) {
-            this._orbiting = false;
-        }
         if (this._panning) {
             this._panning = false;
         }
-        if (this._flying) {
-            this._focusDir(tmpV1);
-            this._origin.add(tmpV1);
-            this._position.add(tmpV1);
-            this._flying = false;
+        if (this._dragging) {
+            this._dragging = false;
         }
     }
 
@@ -783,22 +814,22 @@ class CameraControls extends Script {
 
         tmpV1.set(0, 0, 0);
         if (this._key.forward) {
-            tmpV1.add(this._camera.entity.forward);
+            tmpV1.add(this.entity.forward);
         }
         if (this._key.backward) {
-            tmpV1.sub(this._camera.entity.forward);
+            tmpV1.sub(this.entity.forward);
         }
         if (this._key.left) {
-            tmpV1.sub(this._camera.entity.right);
+            tmpV1.sub(this.entity.right);
         }
         if (this._key.right) {
-            tmpV1.add(this._camera.entity.right);
+            tmpV1.add(this.entity.right);
         }
         if (this._key.up) {
-            tmpV1.add(this._camera.entity.up);
+            tmpV1.add(this.entity.up);
         }
         if (this._key.down) {
-            tmpV1.sub(this._camera.entity.up);
+            tmpV1.sub(this.entity.up);
         }
         tmpV1.normalize();
         this._moving = tmpV1.length() > 0;
@@ -808,6 +839,11 @@ class CameraControls extends Script {
 
         // clamp movement if locked
         if (this._moving) {
+            if (this._focusing) {
+                this._cancelSmoothTransform();
+                this._focusing = false;
+            }
+
             this._clampPosition(this._origin);
         }
     }
@@ -841,8 +877,11 @@ class CameraControls extends Script {
      * @param {Vec3} point - The output point.
      */
     _screenToWorldPan(pos, point) {
+        if (!this._camera) {
+            return;
+        }
         const mouseW = this._camera.screenToWorld(pos.x, pos.y, 1);
-        const cameraPos = this._camera.entity.getPosition();
+        const cameraPos = this.entity.getPosition();
 
         const focusDir = this._focusDir(tmpV1);
         const focalPos = tmpV2.add2(cameraPos, focusDir);
@@ -884,7 +923,12 @@ class CameraControls extends Script {
             return;
         }
         if (this._flying) {
-            return;
+            if (this._dragging) {
+                return;
+            }
+            if (!this._switchToOrbit()) {
+                return;
+            }
         }
 
         if (!this._camera) {
@@ -911,12 +955,34 @@ class CameraControls extends Script {
      * @param {number} dt - The delta time.
      */
     _smoothTransform(dt) {
-        const ar = dt === -1 ? 1 : lerpRate(this.rotateDamping, dt);
-        const am = dt === -1 ? 1 : lerpRate(this.moveDamping, dt);
-        this._angles.x = math.lerp(this._angles.x, this._dir.x, ar);
-        this._angles.y = math.lerp(this._angles.y, this._dir.y, ar);
+        const ar = dt === -1 ? 1 : lerpRate(this._focusing ? this.focusDamping : this.rotateDamping, dt);
+        const am = dt === -1 ? 1 : lerpRate(this._focusing ? this.focusDamping : this.moveDamping, dt);
+        this._angles.x = math.lerpAngle(this._angles.x % 360, this._dir.x % 360, ar);
+        this._angles.y = math.lerpAngle(this._angles.y % 360, this._dir.y % 360, ar);
         this._position.lerp(this._position, this._origin, am);
         this._baseTransform.setTRS(this._position, tmpQ1.setFromEulerAngles(this._angles), Vec3.ONE);
+
+        const focusDelta = this._position.distance(this._origin) +
+            Math.abs(this._angles.x - this._dir.x) +
+            Math.abs(this._angles.y - this._dir.y);
+        if (this._focusing && focusDelta < EPSILON) {
+            this._focusing = false;
+        }
+    }
+
+    /**
+     * @private
+     */
+    _cancelSmoothZoom() {
+        this._cameraDist = this._zoomDist;
+    }
+
+    /**
+     * @private
+     */
+    _cancelSmoothTransform() {
+        this._origin.copy(this._position);
+        this._dir.set(this._angles.x, this._angles.y);
     }
 
     /**
@@ -924,15 +990,15 @@ class CameraControls extends Script {
      */
     _updateTransform() {
         tmpM1.copy(this._baseTransform).mul(this._cameraTransform);
-        this._camera.entity.setPosition(tmpM1.getTranslation());
-        this._camera.entity.setEulerAngles(tmpM1.getEulerAngles());
+        this.entity.setPosition(tmpM1.getTranslation());
+        this.entity.setEulerAngles(tmpM1.getEulerAngles());
     }
 
     /**
      * Focus the camera on a point.
      *
-     * @param {Vec3} point - The point.
-     * @param {Vec3} [start] - The start.
+     * @param {Vec3} point - The focus point.
+     * @param {Vec3} [start] - The camera start position.
      * @param {boolean} [smooth] - Whether to smooth the focus.
      */
     focus(point, start, smooth = true) {
@@ -940,37 +1006,46 @@ class CameraControls extends Script {
             return;
         }
         if (this._flying) {
-            return;
+            if (this._dragging) {
+                return;
+            }
+            if (!this._switchToOrbit()) {
+                return;
+            }
         }
-        if (!start) {
+
+        if (start) {
+            tmpV1.sub2(start, point);
+            const elev = Math.atan2(tmpV1.y, Math.sqrt(tmpV1.x * tmpV1.x + tmpV1.z * tmpV1.z)) * math.RAD_TO_DEG;
+            const azim = Math.atan2(tmpV1.x, tmpV1.z) * math.RAD_TO_DEG;
+            this._clampAngles(this._dir.set(-elev, azim));
+
+            this._origin.copy(point);
+
+            this._cameraTransform.setTranslate(0, 0, 0);
+
+            const pos = this.entity.getPosition();
+            const rot = this.entity.getRotation();
+            this._baseTransform.setTRS(pos, rot, Vec3.ONE);
+
+            this._zoomDist = this._clampZoom(tmpV1.length());
+
+            if (!smooth) {
+                this._smoothZoom(-1);
+                this._smoothTransform(-1);
+            }
+
+            this._updateTransform();
+        } else {
             this._origin.copy(point);
             if (!smooth) {
                 this._position.copy(point);
             }
-            return;
         }
 
-        tmpV1.sub2(start, point);
-        const elev = Math.atan2(tmpV1.y, Math.sqrt(tmpV1.x * tmpV1.x + tmpV1.z * tmpV1.z)) * math.RAD_TO_DEG;
-        const azim = Math.atan2(tmpV1.x, tmpV1.z) * math.RAD_TO_DEG;
-        this._clampAngles(this._dir.set(-elev, azim));
-
-        this._origin.copy(point);
-
-        this._cameraTransform.setTranslate(0, 0, 0);
-
-        const pos = this._camera.entity.getPosition();
-        const rot = this._camera.entity.getRotation();
-        this._baseTransform.setTRS(pos, rot, Vec3.ONE);
-
-        this._zoomDist = this._clampZoom(tmpV1.length());
-
-        if (!smooth) {
-            this._smoothZoom(-1);
-            this._smoothTransform(-1);
+        if (smooth) {
+            this._focusing = true;
         }
-
-        this._updateTransform();
     }
 
     /**
@@ -994,7 +1069,7 @@ class CameraControls extends Script {
      * @param {number} [zoomDist] - The zoom distance.
      * @param {boolean} [smooth] - Whether to smooth the refocus.
      */
-    refocus(point, start = null, zoomDist, smooth = true) {
+    refocus(point, start, zoomDist, smooth = true) {
         if (typeof zoomDist === 'number') {
             this.resetZoom(zoomDist, smooth);
         }
@@ -1040,9 +1115,8 @@ class CameraControls extends Script {
 
         this._camera = null;
 
-        this._dir.x = this._angles.x;
-        this._dir.y = this._angles.y;
-        this._origin.copy(this._position);
+        this._cancelSmoothZoom();
+        this._cancelSmoothTransform();
 
         this._pointerEvents.clear();
         this._lastPinchDist = -1;

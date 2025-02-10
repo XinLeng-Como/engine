@@ -1,6 +1,5 @@
 // Camera Frame v 1.0
 
-/* eslint-disable-next-line import/no-unresolved */
 import { CameraFrame as EngineCameraFrame, Script, Color } from 'playcanvas';
 
 /** @enum {number} */
@@ -30,7 +29,7 @@ const RenderFormat = {
 
 /** @enum {string} */
 const DebugType = {
-    NONE: '',
+    NONE: 'none',
     SCENE: 'scene',
     SSAO: 'ssao',
     BLOOM: 'bloom',
@@ -352,9 +351,11 @@ class CameraFrame extends Script {
      */
     dof = new Dof();
 
-    engineCameraFrame = new EngineCameraFrame(this.app, this.entity.camera);
+    engineCameraFrame;
 
     initialize() {
+
+        this.engineCameraFrame = new EngineCameraFrame(this.app, this.entity.camera);
 
         this.on('enable', () => {
             this.engineCameraFrame.enabled = true;
@@ -366,6 +367,10 @@ class CameraFrame extends Script {
 
         this.on('destroy', () => {
             this.engineCameraFrame.destroy();
+        });
+
+        this.on('state', (enabled) => {
+            this.engineCameraFrame.enabled = enabled;
         });
     }
 

@@ -194,6 +194,7 @@ class OutlineRenderer {
 
                         // custom shader for the outline shader pass, renders single color meshes using emissive color
                         const opts = new StandardMaterialOptions();
+                        opts.defines = options.defines;
                         opts.opacityMap = options.opacityMap;
                         opts.opacityMapUv = options.opacityMapUv;
                         opts.opacityMapChannel = options.opacityMapChannel;
@@ -203,6 +204,11 @@ class OutlineRenderer {
                         opts.litOptions.vertexColors = options.litOptions.vertexColors;
                         opts.litOptions.alphaTest = options.litOptions.alphaTest;
                         opts.litOptions.skin = options.litOptions.skin;
+                        opts.litOptions.batch = options.litOptions.batch;
+                        opts.litOptions.useInstancing = options.litOptions.useInstancing;
+                        opts.litOptions.useMorphPosition = options.litOptions.useMorphPosition;
+                        opts.litOptions.useMorphNormal = options.litOptions.useMorphNormal;
+                        opts.litOptions.useMorphTextureBasedInt = options.litOptions.useMorphTextureBasedInt;
                         return opts;
                     }
 
