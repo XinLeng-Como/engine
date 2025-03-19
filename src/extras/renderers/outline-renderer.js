@@ -97,11 +97,12 @@ class OutlineRenderer {
         this.outlineShaderPass = this.outlineCameraEntity.camera.setShaderPass('OutlineShaderPass');
 
         // function called after the camera has rendered the outline objects to the texture
-        app.scene.on('postrender', (cameraComponent) => {
+        this.postRender = (cameraComponent) => {
             if (this.outlineCameraEntity.camera === cameraComponent) {
                 this.onPostRender();
             }
-        });
+        };
+        app.scene.on('postrender', this.postRender);
 
         // add the camera to the scene
         this.app.root.addChild(this.outlineCameraEntity);
@@ -148,6 +149,8 @@ class OutlineRenderer {
         this.tempRt.destroy();
         this.tempRt = null;
 
+        this.app.scene.off('postrender', this.postRender);
+
         this.quadRenderer?.destroy();
         this.quadRenderer = null;
     }
@@ -157,14 +160,14 @@ class OutlineRenderer {
 
         const renders = recursive ? entity.findComponents('render') : (entity.render ? [entity.render] : []);
         renders.forEach((render) => {
-            if (render.entity.enabled && render.enabled) {
+            if (render.meshInstances) {
                 meshInstances.push(...render.meshInstances);
             }
         });
 
         const models = recursive ? entity.findComponents('model') : (entity.model ? [entity.model] : []);
         models.forEach((model) => {
-            if (model.entity.enabled && model.enabled) {
+            if (model.meshInstances) {
                 meshInstances.push(...model.meshInstances);
             }
         });

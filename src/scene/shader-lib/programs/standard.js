@@ -204,6 +204,52 @@ class ShaderGeneratorStandard extends ShaderGenerator {
         }
     }
 
+    createVertexShader(litShader, options) {
+
+        const useUv = [];
+        const useUnmodifiedUv = [];
+        const mapTransforms = [];
+        const maxUvSets = 2;
+
+        for (const p in _matTex2D) {
+            const mapName = `${p}Map`;
+
+            if (options[`${p}VertexColor`]) {
+                const colorChannelName = `${p}VertexColorChannel`;
+                options[colorChannelName] = this._correctChannel(p, options[colorChannelName], _matTex2D);
+            }
+
+            if (options[mapName]) {
+                const channelName = `${mapName}Channel`;
+                const transformName = `${mapName}Transform`;
+                const uvName = `${mapName}Uv`;
+
+                options[uvName] = Math.min(options[uvName], maxUvSets - 1);
+                options[channelName] = this._correctChannel(p, options[channelName], _matTex2D);
+
+                const uvSet = options[uvName];
+                useUv[uvSet] = true;
+                useUnmodifiedUv[uvSet] = useUnmodifiedUv[uvSet] || (options[mapName] && !options[transformName]);
+
+                // create map transforms
+                if (options[transformName]) {
+                    mapTransforms.push({
+                        name: p,
+                        id: options[transformName],
+                        uv: options[uvName]
+                    });
+                }
+            }
+        }
+
+        if (options.forceUv1) {
+            useUv[1] = true;
+            useUnmodifiedUv[1] = (useUnmodifiedUv[1] !== undefined) ? useUnmodifiedUv[1] : true;
+        }
+
+        litShader.generateVertexShader(useUv, useUnmodifiedUv, mapTransforms);
+    }
+
     /**
      * @param {GraphicsDevice} device - The graphics device.
      * @param {StandardMaterialOptions} options - The create options.
@@ -216,51 +262,11 @@ class ShaderGeneratorStandard extends ShaderGenerator {
         const litShader = new LitShader(device, options.litOptions);
 
         // generate vertex shader
-        const useUv = [];
-        const useUnmodifiedUv = [];
-        const mapTransforms = [];
-        const maxUvSets = 2;
-        const textureMapping = {};
-
-        for (const p in _matTex2D) {
-            const mname = `${p}Map`;
-
-            if (options[`${p}VertexColor`]) {
-                const cname = `${p}VertexColorChannel`;
-                options[cname] = this._correctChannel(p, options[cname], _matTex2D);
-            }
-
-            if (options[mname]) {
-                const cname = `${mname}Channel`;
-                const tname = `${mname}Transform`;
-                const uname = `${mname}Uv`;
-
-                options[uname] = Math.min(options[uname], maxUvSets - 1);
-                options[cname] = this._correctChannel(p, options[cname], _matTex2D);
-
-                const uvSet = options[uname];
-                useUv[uvSet] = true;
-                useUnmodifiedUv[uvSet] = useUnmodifiedUv[uvSet] || (options[mname] && !options[tname]);
-
-                // create map transforms
-                if (options[tname]) {
-                    mapTransforms.push({
-                        name: p,
-                        id: options[tname],
-                        uv: options[uname]
-                    });
-                }
-            }
-        }
-
-        if (options.forceUv1) {
-            useUv[1] = true;
-            useUnmodifiedUv[1] = (useUnmodifiedUv[1] !== undefined) ? useUnmodifiedUv[1] : true;
-        }
-
-        litShader.generateVertexShader(useUv, useUnmodifiedUv, mapTransforms);
+        this.createVertexShader(litShader, options);
 
         // handle fragment shader
+        const textureMapping = {};
+
         options.litOptions.fresnelModel = (options.litOptions.fresnelModel === 0) ? FRESNEL_SCHLICK : options.litOptions.fresnelModel;
 
         const decl = new ChunkBuilder();
@@ -514,8 +520,12 @@ class ShaderGeneratorStandard extends ShaderGenerator {
         }
 
         decl.append(litShader.chunks.litShaderArgsPS);
-        code.append(`void evaluateFrontend() { \n${func.code}\n${args.code}\n }\n`);
-        func.code = 'evaluateFrontend();';
+        code.append(`
+            void evaluateFrontend() {
+                ${func.code}
+                ${args.code}
+            }
+        `);
 
         for (const texture in textureMapping) {
             decl.append(`uniform sampler2D ${textureMapping[texture]};`);
@@ -525,10 +535,7 @@ class ShaderGeneratorStandard extends ShaderGenerator {
         // code.append('//-------- frontend code begin', code.code, '//-------- frontend code end');
         // func.append('//-------- frontend func begin\n${func}//-------- frontend func end\n`;
 
-        // format func
-        func.code = `\n${func.code.split('\n').map(l => `    ${l}`).join('\n')}\n\n`;
-
-        litShader.generateFragmentShader(decl.code, code.code, func.code, lightingUv);
+        litShader.generateFragmentShader(decl.code, code.code, lightingUv);
 
         const includes = new Map(Object.entries({
             ...Object.getPrototypeOf(litShader.chunks), // the prototype stores the default chunks
@@ -536,7 +543,11 @@ class ShaderGeneratorStandard extends ShaderGenerator {
             ...options.litOptions.chunks
         }));
 
-        const defines = new Map(options.defines);
+        const vDefines = litShader.vDefines;
+        options.defines.forEach((value, key) => vDefines.set(key, value));
+
+        const fDefines = litShader.fDefines;
+        options.defines.forEach((value, key) => fDefines.set(key, value));
 
         const definition = ShaderUtils.createDefinition(device, {
             name: 'StandardShader',
@@ -545,8 +556,8 @@ class ShaderGeneratorStandard extends ShaderGenerator {
             fragmentCode: litShader.fshader,
             vertexIncludes: includes,
             fragmentIncludes: includes,
-            fragmentDefines: defines,
-            vertexDefines: defines
+            fragmentDefines: fDefines,
+            vertexDefines: vDefines
         });
 
         if (litShader.shaderPassInfo.isForward) {
