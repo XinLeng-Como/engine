@@ -1,7 +1,9 @@
 import {
     SEMANTIC_ATTR8, SEMANTIC_ATTR9, SEMANTIC_ATTR12, SEMANTIC_ATTR13, SEMANTIC_ATTR14, SEMANTIC_ATTR15,
     SEMANTIC_BLENDINDICES, SEMANTIC_BLENDWEIGHT, SEMANTIC_COLOR, SEMANTIC_NORMAL, SEMANTIC_POSITION, SEMANTIC_TANGENT,
-    SEMANTIC_TEXCOORD0, SEMANTIC_TEXCOORD1
+    SEMANTIC_TEXCOORD0, SEMANTIC_TEXCOORD1,
+    SHADERLANGUAGE_GLSL,
+    SHADERLANGUAGE_WGSL
 } from '../../../platform/graphics/constants.js';
 import {
     LIGHTSHAPE_PUNCTUAL,
@@ -17,6 +19,7 @@ import { ChunkUtils } from '../chunk-utils.js';
 import { ShaderPass } from '../../shader-pass.js';
 import { validateUserChunks } from '../chunks/chunk-validation.js';
 import { Debug } from '../../../core/debug.js';
+import { shaderChunksWGSL } from '../chunks-wgsl/chunks-wgsl.js';
 
 /**
  * @import { GraphicsDevice } from '../../../platform/graphics/graphics-device.js'
@@ -63,12 +66,22 @@ class LitShader {
     options;
 
     /**
+     * The shader language, {@link SHADERLANGUAGE_GLSL} or {@link SHADERLANGUAGE_WGSL}.
+     *
+     * @type {string}
+     */
+    shaderLanguage;
+
+    /**
      * @param {GraphicsDevice} device - The graphics device.
      * @param {LitShaderOptions} options - The lit options.
+     * @param {string} shaderLanguage - The shader language, {@link SHADERLANGUAGE_GLSL} or
+     * {@link SHADERLANGUAGE_WGSL}.
      */
-    constructor(device, options) {
+    constructor(device, options, shaderLanguage) {
         this.device = device;
         this.options = options;
+        this.shaderLanguage = shaderLanguage;
 
         // resolve custom chunk attributes
         this.attributes = {
@@ -81,6 +94,7 @@ class LitShader {
             }
         }
 
+        const languageChunks = shaderLanguage === SHADERLANGUAGE_GLSL ? shaderChunks : shaderChunksWGSL;
         if (options.chunks) {
             const userChunks = options.chunks;
 
@@ -88,8 +102,8 @@ class LitShader {
             validateUserChunks(userChunks);
             // #endif
 
-            this.chunks = Object.create(shaderChunks);
-            for (const chunkName in shaderChunks) {
+            this.chunks = Object.create(languageChunks);
+            for (const chunkName in languageChunks) {
                 if (userChunks.hasOwnProperty(chunkName)) {
                     const chunk = userChunks[chunkName];
                     for (const a in builtinAttributes) {
@@ -101,7 +115,7 @@ class LitShader {
                 }
             }
         } else {
-            this.chunks = shaderChunks;
+            this.chunks = languageChunks;
         }
 
         this.shaderPassInfo = ShaderPass.get(this.device).getByIndex(options.pass);
@@ -158,7 +172,7 @@ class LitShader {
      */
     generateVertexShader(useUv, useUnmodifiedUv, mapTransforms) {
 
-        const { options, vDefines, attributes, chunks } = this;
+        const { options, vDefines, attributes } = this;
 
         // varyings
         const varyings = new Map();
@@ -191,7 +205,7 @@ class LitShader {
             attributes.vertex_normal = SEMANTIC_NORMAL;
             varyings.set('vNormalW', 'vec3');
 
-            if (options.hasTangents && (options.useHeights || options.useNormals || options.enableGGXSpecular)) {
+            if (options.hasTangents && (options.useHeights || options.useNormals || options.useClearCoatNormals || options.enableGGXSpecular)) {
 
                 vDefines.set('TANGENTS', true);
                 attributes.vertex_tangent = SEMANTIC_TANGENT;
@@ -287,13 +301,15 @@ class LitShader {
         // generate varyings code
         varyings.forEach((type, name) => {
             vDefines.set(`VARYING_${name.toUpperCase()}`, true);
-            const generateWgsl = false; // when we switch generation to WGSL on WebGPU
-            this.varyingsCode += generateWgsl ?
+            this.varyingsCode += this.shaderLanguage === SHADERLANGUAGE_WGSL ?
                 `varying ${name}: ${varyingsWGSLTypes.get(type)};\n` :
                 `varying ${type} ${name};\n`;
         });
 
-        this.vshader = this.varyingsCode + chunks.litMainVS;
+        this.vshader = `
+            ${this.varyingsCode}
+            #include "litMainVS"
+        `;
     }
 
     /**
@@ -404,7 +420,10 @@ class LitShader {
             this.fDefineSet(options.useSheen, 'LIT_SHEEN');
             this.fDefineSet(options.useIridescence, 'LIT_IRIDESCENCE');
         }
-
+        this.fDefineSet((this.lighting && options.useSpecular) || this.reflections, 'LIT_SPECULAR_OR_REFLECTION');
+        this.fDefineSet(this.needsSceneColor, 'LIT_SCENE_COLOR');
+        this.fDefineSet(this.needsScreenSize, 'LIT_SCREEN_SIZE');
+        this.fDefineSet(this.needsTransforms, 'LIT_TRANSFORMS');
         this.fDefineSet(this.needsNormal, 'LIT_NEEDS_NORMAL');
         this.fDefineSet(this.lighting, 'LIT_LIGHTING');
         this.fDefineSet(options.useMetalness, 'LIT_METALNESS');
@@ -430,6 +449,7 @@ class LitShader {
         this.fDefineSet(options.useHeights, 'LIT_HEIGHTS');
         this.fDefineSet(options.opacityFadesSpecular, 'LIT_OPACITY_FADES_SPECULAR');
         this.fDefineSet(options.alphaToCoverage, 'LIT_ALPHA_TO_COVERAGE');
+        this.fDefineSet(options.alphaTest, 'LIT_ALPHA_TEST');
         this.fDefineSet(options.useMsdf, 'LIT_MSDF');
         this.fDefineSet(options.ssao, 'LIT_SSAO');
         this.fDefineSet(options.useAo, 'LIT_AO');
@@ -457,6 +477,7 @@ class LitShader {
 
     prepareShadowPass() {
 
+        const { options } = this;
         const lightType = this.shaderPassInfo.lightType;
 
         const shadowType = this.shaderPassInfo.shadowType;
@@ -472,6 +493,7 @@ class LitShader {
         this.fDefineSet(usePerspectiveDepth, 'PERSPECTIVE_DEPTH');
         this.fDefineSet(true, 'LIGHT_TYPE', `${lightTypeNames[lightType]}`);
         this.fDefineSet(true, 'SHADOW_TYPE', `${shadowInfo.name}`);
+        this.fDefineSet(options.alphaTest, 'LIT_ALPHA_TEST');
     }
 
     /**
@@ -525,7 +547,9 @@ class LitShader {
             `;
         }
 
-        Debug.assert(!this.fshader.includes('litShaderArgs'), 'Automatic compatibility with shaders using litShaderArgs has been removed. Please update the shader to use the new system.');
+        Debug.assert(!this.fshader.includes('litShaderArgs.'), 'Automatic compatibility with shaders using litShaderArgs has been removed. Please update the shader to use the new system.', {
+            fshader: this.fshader
+        });
     }
 }
 

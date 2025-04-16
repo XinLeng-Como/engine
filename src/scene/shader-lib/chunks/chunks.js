@@ -1,7 +1,6 @@
 import alphaTestPS from './standard/frag/alphaTest.js';
 import ambientPS from './lit/frag/ambient.js';
 import aoPS from './standard/frag/ao.js';
-import aoDetailMapPS from './standard/frag/aoDetailMap.js';
 import aoDiffuseOccPS from './lit/frag/aoDiffuseOcc.js';
 import aoSpecOccPS from './lit/frag/aoSpecOcc.js';
 import basePS from './lit/frag/base.js';
@@ -17,6 +16,9 @@ import clusteredLightCookiesPS from './lit/frag/clusteredLightCookies.js';
 import clusteredLightShadowsPS from './lit/frag/clusteredLightShadows.js';
 import clusteredLightPS from './lit/frag/clusteredLight.js';
 import combinePS from './lit/frag/combine.js';
+import cookieBlit2DPS from './internal/frag/cookie-blit-2d.js';
+import cookieBlitCubePS from './internal/frag/cookie-blit-cube.js';
+import cookieBlitVS from './internal/vert/cookie-blit.js';
 import cookiePS from './lit/frag/cookie.js';
 import cubeMapProjectPS from './lit/frag/cubeMapProject.js';
 import cubeMapRotatePS from './lit/frag/cubeMapRotate.js';
@@ -25,7 +27,6 @@ import debugProcessFrontendPS from './lit/frag/debug-process-frontend.js';
 import decodePS from './common/frag/decode.js';
 import detailModesPS from './standard/frag/detailModes.js';
 import diffusePS from './standard/frag/diffuse.js';
-import diffuseDetailMapPS from './standard/frag/diffuseDetailMap.js';
 import emissivePS from './standard/frag/emissive.js';
 import encodePS from './common/frag/encode.js';
 import endPS from './lit/frag/end.js';
@@ -47,6 +48,9 @@ import gsplatColorVS from './gsplat/vert/gsplatColor.js';
 import gsplatCommonVS from './gsplat/vert/gsplatCommon.js';
 import gsplatCompressedDataVS from './gsplat/vert/gsplatCompressedData.js';
 import gsplatCompressedSHVS from './gsplat/vert/gsplatCompressedSH.js';
+import gsplatSogsColorVS from './gsplat/vert/gsplatSogsColor.js';
+import gsplatSogsDataVS from './gsplat/vert/gsplatSogsData.js';
+import gsplatSogsSHVS from './gsplat/vert/gsplatSogsSH.js';
 import gsplatCornerVS from './gsplat/vert/gsplatCorner.js';
 import gsplatDataVS from './gsplat/vert/gsplatData.js';
 import gsplatOutputVS from './gsplat/vert/gsplatOutput.js';
@@ -68,8 +72,7 @@ import lightFunctionLightPS from './lit/frag/lighting/lightFunctionLight.js';
 import lightFunctionShadowPS from './lit/frag/lighting/lightFunctionShadow.js';
 import lightingPS from './lit/frag/lighting/lighting.js';
 import lightmapAddPS from './lit/frag/lightmapAdd.js';
-import lightmapDirPS from './standard/frag/lightmapDir.js';
-import lightmapSinglePS from './standard/frag/lightmapSingle.js';
+import lightmapPS from './standard/frag/lightmap.js';
 import lightSpecularAnisoGGXPS from './lit/frag/lightSpecularAnisoGGX.js';
 import lightSpecularBlinnPS from './lit/frag/lightSpecularBlinn.js';
 import lightSheenPS from './lit/frag/lightSheen.js';
@@ -82,6 +85,7 @@ import litForwardPreCodePS from './lit/frag/pass-forward/litForwardPreCode.js';
 import litMainVS from './lit/vert/litMain.js';
 import litOtherMainPS from './lit/frag/pass-other/litOtherMain.js';
 import litShaderArgsPS from './standard/frag/litShaderArgs.js';
+import litShaderCorePS from './standard/frag/litShaderCore.js';
 import litShadowMainPS from './lit/frag/pass-shadow/litShadowMain.js';
 import ltcPS from './lit/frag/ltc.js';
 import metalnessPS from './standard/frag/metalness.js';
@@ -94,10 +98,7 @@ import morphVS from './internal/morph/vert/morph.js';
 import msdfVS from './common/vert/msdf.js';
 import normalVS from './lit/vert/normal.js';
 import normalCoreVS from './common/vert/normalCore.js';
-import normalDetailMapPS from './standard/frag/normalDetailMap.js';
 import normalMapPS from './standard/frag/normalMap.js';
-import normalXYPS from './standard/frag/normalXY.js';
-import normalXYZPS from './standard/frag/normalXYZ.js';
 import opacityPS from './standard/frag/opacity.js';
 import opacityDitherPS from './standard/frag/opacity-dither.js';
 import outputPS from './lit/frag/output.js';
@@ -141,6 +142,9 @@ import particle_meshVS from './particle/vert/particle_mesh.js';
 import particle_normalVS from './particle/vert/particle_normal.js';
 import particle_normalMapPS from './particle/frag/particle_normalMap.js';
 import particle_pointAlongVS from './particle/vert/particle_pointAlong.js';
+import particle_simulationPS from './particle/frag/particle-simulation.js';
+import particle_shaderPS from './particle/frag/particle-shader.js';
+import particle_shaderVS from './particle/vert/particle-shader.js';
 import particle_softPS from './particle/frag/particle_soft.js';
 import particle_softVS from './particle/vert/particle_soft.js';
 import particle_stretchVS from './particle/vert/particle_stretch.js';
@@ -178,6 +182,8 @@ import specularityFactorPS from './standard/frag/specularityFactor.js';
 import spotPS from './lit/frag/spot.js';
 import startNineSlicedPS from './lit/frag/startNineSliced.js';
 import startNineSlicedTiledPS from './lit/frag/startNineSlicedTiled.js';
+import stdDeclarationPS from './standard/frag/stdDeclaration.js';
+import stdFrontEndPS from './standard/frag/stdFrontEnd.js';
 import tangentBinormalVS from './lit/vert/tangentBinormal.js';
 import TBNPS from './lit/frag/TBN.js';
 import thicknessPS from './standard/frag/thickness.js';
@@ -196,7 +202,7 @@ import transmissionPS from './standard/frag/transmission.js';
 import twoSidedLightingPS from './lit/frag/twoSidedLighting.js';
 import uv0VS from './lit/vert/uv0.js';
 import uv1VS from './lit/vert/uv1.js';
-import uvTransformPS from './lit/vert/uvTransform.js';
+import uvTransformVS from './lit/vert/uvTransform.js';
 import uvTransformUniformsPS from './lit/vert/uvTransformUniforms.js';
 import viewDirPS from './lit/frag/viewDir.js';
 import webgpuPS from '../../../platform/graphics/shader-chunks/frag/webgpu.js';
@@ -212,7 +218,6 @@ const shaderChunks = {
     alphaTestPS,
     ambientPS,
     aoPS,
-    aoDetailMapPS,
     aoDiffuseOccPS,
     aoSpecOccPS,
     basePS,
@@ -228,6 +233,9 @@ const shaderChunks = {
     clusteredLightUtilsPS,
     clusteredLightPS,
     combinePS,
+    cookieBlit2DPS,
+    cookieBlitCubePS,
+    cookieBlitVS,
     cookiePS,
     cubeMapProjectPS,
     cubeMapRotatePS,
@@ -235,7 +243,6 @@ const shaderChunks = {
     debugProcessFrontendPS,
     detailModesPS,
     diffusePS,
-    diffuseDetailMapPS,
     decodePS,
     emissivePS,
     encodePS,
@@ -259,6 +266,9 @@ const shaderChunks = {
     gsplatCommonVS,
     gsplatCompressedDataVS,
     gsplatCompressedSHVS,
+    gsplatSogsColorVS,
+    gsplatSogsDataVS,
+    gsplatSogsSHVS,
     gsplatDataVS,
     gsplatOutputVS,
     gsplatPS,
@@ -280,8 +290,7 @@ const shaderChunks = {
     lightFunctionShadowPS,
     lightingPS,
     lightmapAddPS,
-    lightmapDirPS,
-    lightmapSinglePS,
+    lightmapPS,
     lightSpecularAnisoGGXPS,
     lightSpecularBlinnPS,
     lightSheenPS,
@@ -294,6 +303,7 @@ const shaderChunks = {
     litMainVS,
     litOtherMainPS,
     litShaderArgsPS,
+    litShaderCorePS,
     litShadowMainPS,
     ltcPS,
     metalnessPS,
@@ -306,10 +316,7 @@ const shaderChunks = {
     msdfVS,
     normalVS,
     normalCoreVS,
-    normalDetailMapPS,
     normalMapPS,
-    normalXYPS,
-    normalXYZPS,
     opacityPS,
     opacityDitherPS,
     outputPS,
@@ -353,6 +360,9 @@ const shaderChunks = {
     particle_normalVS,
     particle_normalMapPS,
     particle_pointAlongVS,
+    particle_simulationPS,
+    particle_shaderPS,
+    particle_shaderVS,
     particle_softPS,
     particle_softVS,
     particle_stretchVS,
@@ -390,6 +400,8 @@ const shaderChunks = {
     spotPS,
     startNineSlicedPS,
     startNineSlicedTiledPS,
+    stdDeclarationPS,
+    stdFrontEndPS,
     tangentBinormalVS,
     TBNPS,
     thicknessPS,
@@ -408,7 +420,7 @@ const shaderChunks = {
     twoSidedLightingPS,
     uv0VS,
     uv1VS,
-    uvTransformPS,
+    uvTransformVS,
     uvTransformUniformsPS,
     viewDirPS,
     webgpuPS,
