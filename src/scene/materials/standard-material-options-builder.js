@@ -68,7 +68,7 @@ class StandardMaterialOptionsBuilder {
             options.litOptions.userAttributes = Object.fromEntries(stdMat.userAttributes.entries());
         }
 
-        options.litOptions.chunks = stdMat.chunks || {};
+        options.litOptions.shaderChunks = stdMat.shaderChunks;
         options.litOptions.pass = pass;
         options.litOptions.alphaTest = stdMat.alphaTest > 0;
         options.litOptions.blendType = stdMat.blendType;
@@ -262,7 +262,6 @@ class StandardMaterialOptionsBuilder {
 
         // LIT OPTIONS
         options.litOptions.separateAmbient = false;    // store ambient light color in separate variable, instead of adding it to diffuse directly
-        options.litOptions.customFragmentShader = stdMat.customFragmentShader;
         options.litOptions.pixelSnap = stdMat.pixelSnap;
 
         options.litOptions.ambientSH = !!stdMat.ambientSH;
@@ -391,15 +390,18 @@ class StandardMaterialOptionsBuilder {
 
             if (sortedLights) {
                 LitMaterialOptionsBuilder.collectLights(LIGHTTYPE_DIRECTIONAL, sortedLights[LIGHTTYPE_DIRECTIONAL], lightsFiltered, mask);
-                LitMaterialOptionsBuilder.collectLights(LIGHTTYPE_OMNI, sortedLights[LIGHTTYPE_OMNI], lightsFiltered, mask);
-                LitMaterialOptionsBuilder.collectLights(LIGHTTYPE_SPOT, sortedLights[LIGHTTYPE_SPOT], lightsFiltered, mask);
+
+                if (!scene.clusteredLightingEnabled) {
+                    LitMaterialOptionsBuilder.collectLights(LIGHTTYPE_OMNI, sortedLights[LIGHTTYPE_OMNI], lightsFiltered, mask);
+                    LitMaterialOptionsBuilder.collectLights(LIGHTTYPE_SPOT, sortedLights[LIGHTTYPE_SPOT], lightsFiltered, mask);
+                }
             }
             options.litOptions.lights = lightsFiltered;
         } else {
             options.litOptions.lights = [];
         }
 
-        if (options.litOptions.lights.length === 0) {
+        if (options.litOptions.lights.length === 0 && !scene.clusteredLightingEnabled) {
             options.litOptions.noShadow = true;
         }
     }
