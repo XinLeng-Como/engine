@@ -131,3 +131,149 @@ For Editor-related bugs and issues, please refer to the [Editor's repo](https://
 [twitter-badge]: https://img.shields.io/twitter/follow/playcanvas.svg?style=social&label=Follow
 [twitter-url]: https://twitter.com/intent/follow?screen_name=playcanvas
 [docs]: https://api.playcanvas.com/modules/Engine.html
+
+# Planar Reflection System for PlayCanvas Editor
+
+This script creates a planar reflection system that can be used in the PlayCanvas Editor. It's adapted from the reflection-planar engine example and provides a reflective ground plane with animated objects.
+
+## Files Included
+
+- `planar-reflection-system.js` - Main script that creates the reflection system
+- `planar-renderer.js` - Utility script for planar reflection rendering
+- `README.md` - This documentation file
+
+## Features
+
+- ✨ Reflective ground plane with real-time reflections
+- 🎯 Configurable animated primitive objects
+- 📷 Optional camera animation
+- 🎨 Customizable environment and materials
+- 🔧 Easy-to-use editor interface
+
+## Installation
+
+1. **Upload Both Scripts**
+   - Download both `planar-reflection-system.js` and `planar-renderer.js`
+   - In your PlayCanvas Editor project, go to **Assets**
+   - Click **Upload** and select both script files
+   - Both scripts will appear in your assets panel
+
+2. **Add Required Assets**
+   You'll need these assets in your project:
+   
+   - **Environment Texture**: A cubemap or environment atlas for the skybox
+   - **Model Asset** (optional): A 3D model to display (like the statue in the original example)
+   - **Both Script Files**: Both `planar-reflection-system.js` and `planar-renderer.js` are required
+
+## Setup Instructions
+
+### Step 1: Add the Script to an Entity
+
+1. Create a new Entity or select an existing one (this will be your reflection system controller)
+2. In the **Inspector**, click **Add Component** → **Script**
+3. Click **Add Script** and select `planarReflectionSystem`
+
+### Step 2: Configure Script Attributes
+
+In the script component, you'll see these configurable properties:
+
+#### Required Assets
+- **Environment Atlas**: Drag your environment texture asset here
+- **Planar Renderer Script**: Drag the `planar-renderer.js` script asset here
+
+#### Optional Assets
+- **Statue Model**: Drag a 3D model asset if you want a central object
+- **Main Camera**: Drag your main camera entity (if not set, it will find "Camera" automatically)
+
+#### Animation Settings
+- **Animate Objects**: Enable/disable object animation (default: true)
+- **Animate Camera**: Enable/disable camera animation (default: true)
+- **Ground Size**: Size of the reflective ground plane (default: 40)
+- **Object Count**: Number of animated primitive objects (default: 6, range: 1-20)
+
+### Step 3: Setup Your Scene
+
+1. **Camera Setup**:
+   - Make sure you have a camera in your scene
+   - If using camera animation, the script will control its position
+   - If not using camera animation, position your camera manually
+
+2. **Lighting**:
+   - Add some lights to your scene for better reflection visibility
+   - The script will set up the skybox automatically if you provide an environment atlas
+
+3. **Ground Positioning**:
+   - The reflective ground plane is created at (0, 0, 0)
+   - Position other objects in your scene accordingly
+
+## How It Works
+
+The script creates several components:
+
+1. **Reflective Ground Plane**: A plane that receives reflection textures
+2. **Reflection Camera**: A secondary camera that renders the reflection
+3. **Animated Objects**: Random primitive shapes that move in orbit patterns
+4. **Layer Management**: Creates an "Excluded" layer for objects that shouldn't appear in reflections
+
+## Customization
+
+### Modifying Materials
+You can customize the ground material by modifying the `createGroundMaterial()` function:
+
+```javascript
+PlanarReflectionSystem.prototype.createGroundMaterial = function() {
+    this.groundMaterial = new pc.StandardMaterial();
+    this.groundMaterial.diffuse = new pc.Color(0.8, 0.8, 0.8); // Change ground color
+    this.groundMaterial.gloss = 0.9;     // Adjust glossiness
+    this.groundMaterial.metalness = 0.1; // Adjust metalness
+    this.groundMaterial.useMetalness = true;
+    this.groundMaterial.update();
+};
+```
+
+### Adding Custom Objects
+To add your own objects instead of random primitives, modify the `createAnimatedObjects()` function or disable object animation and add objects manually to your scene.
+
+### Custom Animation Patterns
+Modify the `updateAnimatedObjects()` and `updateCamera()` functions to change animation patterns.
+
+## Troubleshooting
+
+### Common Issues
+
+1. **No Reflections Visible**
+   - Ensure the Planar Renderer Script asset is properly assigned
+   - Check that your environment atlas is loaded
+   - Verify the camera is positioned above the ground plane
+
+2. **Script Errors**
+   - Make sure all required assets are assigned
+   - Check the browser console for specific error messages
+   - Ensure the planar-renderer script is compatible
+
+3. **Performance Issues**
+   - Reduce the object count
+   - Disable camera or object animation if not needed
+   - Consider reducing the ground size
+
+### Layer Configuration
+If you need to customize which objects appear in reflections:
+- Objects in the "World" layer will appear in reflections
+- Objects in the "Excluded" layer will not appear in reflections
+- The reflective ground itself is in the "Excluded" layer
+
+## Dependencies
+
+- PlayCanvas Engine (latest version recommended)
+- `planar-renderer.js` script (from PlayCanvas engine examples)
+
+## Notes
+
+- The script automatically cleans up created entities when destroyed
+- Camera animation moves in a circular orbit pattern
+- Object animation creates orbital motion with rotation
+- The reflection texture is updated every frame for real-time reflections
+
+## License
+
+This script is adapted from PlayCanvas engine examples and follows the same licensing terms.
